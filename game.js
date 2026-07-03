@@ -1,5 +1,5 @@
 // ==================== game.js ====================
-// Usa CONFIG do config.js
+// Agora usa CONFIG do arquivo config.js
 
 let credits = CONFIG.INITIAL_CREDITS;
 let currentBet = CONFIG.BET.DEFAULT;
@@ -17,7 +17,7 @@ let spinning = false;
 let autoSpinActive = false;
 let autoSpinCount = 0;
 
-// Missões - carregadas do CONFIG e adaptadas com progress/completed
+// Missões – usa CONFIG.MISSIONS (mas mantém progresso)
 let missions = CONFIG.MISSIONS.map(m => ({
     ...m,
     progress: 0,
@@ -28,6 +28,8 @@ let lastMissionReset = Date.now();
 let reels = [];
 let creditSpan, betSpan, lastWinSpan, multiplierSpan, bonusSpan, levelSpan, xpSpan, betInput, spinBtn, stopAutoBtn;
 
+// ========== FUNÇÕES AUXILIARES ==========
+function getRandomSymbol() { return CONFIG.getRandomSymbol(); }
 function renderSymbolHTML(sym) { return `<img src="${sym.img}" alt="${sym.name}">`; }
 
 function updateUI() {
@@ -66,17 +68,18 @@ function updateRankingUI() {
     });
 }
 
+// ========== MISSÕES ==========
 function loadMissions() {
     const saved = localStorage.getItem("missions");
     if (saved) {
-        try {
-            const parsed = JSON.parse(saved);
-            // Mescla com os dados atuais (para manter compatibilidade)
-            missions = parsed.map(p => {
-                const base = CONFIG.MISSIONS.find(m => m.id === p.id);
-                return base ? { ...base, ...p } : p;
-            });
-        } catch(e) {}
+        const parsed = JSON.parse(saved);
+        // Atualiza com as novas missões do CONFIG, mantendo progresso
+        missions = CONFIG.MISSIONS.map(m => {
+            const existing = parsed.find(p => p.id === m.id);
+            return existing ? { ...m, progress: existing.progress, completed: existing.completed } : { ...m, progress: 0, completed: false };
+        });
+    } else {
+        missions = CONFIG.MISSIONS.map(m => ({ ...m, progress: 0, completed: false }));
     }
     const savedReset = localStorage.getItem("lastMissionReset");
     if (savedReset) lastMissionReset = parseInt(savedReset);
@@ -118,6 +121,7 @@ function checkDailyReset() {
     if (Date.now() - lastMissionReset >= 24 * 60 * 60 * 1000) resetDailyMissions();
 }
 
+// ========== EFEITOS VISUAIS ==========
 function showWinEffect(amount) {
     const overlay = document.createElement('div');
     overlay.className = 'win-overlay ' + (amount > 500 ? 'big' : 'small');
@@ -146,9 +150,10 @@ function showWinEffect(amount) {
         floating.remove();
         const appDiv = document.querySelector('.app');
         if (appDiv) appDiv.classList.remove('shake');
-    }, amount > 500 ? 2200 : 1400); // mantido fixo, mas pode ser ajustado
+    }, amount > 500 ? CONFIG.ANIMATION.WIN_EFFECT_BIG + 600 : CONFIG.ANIMATION.WIN_EFFECT_SMALL + 500);
 }
 
+// ========== LÓGICA DE PRÊMIOS ==========
 function evaluateMiddleRowWin(slots, bet, multiplier) {
     const mid = [slots[3], slots[4], slots[5]];
     const names = mid.map(s => s.name);
@@ -175,7 +180,7 @@ function evaluateMiddleRowWin(slots, bet, multiplier) {
         win = bet * mid[0].value * P.THREE_SAME;
     }
 
-    // Verifica par
+    // Regra do par
     if (win === 0) {
         const counts = {};
         names.forEach(n => counts[n] = (counts[n] || 0) + 1);
@@ -205,7 +210,7 @@ function evaluateMiddleRowWin(slots, bet, multiplier) {
     return { winAmount: win, addBonus, triggerFree };
 }
 
-// 🔄 Função que envia TUDO de uma vez para o servidor
+// ========== SINCRONIZAÇÃO COM SERVIDOR ==========
 async function syncToServer(winAmount) {
     try {
         await fetch('/api/sync', {
@@ -222,6 +227,7 @@ async function syncToServer(winAmount) {
     }
 }
 
+// ========== GIRO PRINCIPAL ==========
 async function performSpin(isFree = false) {
     if (spinning) return;
     if (!isFree && credits < currentBet && freeSpins === 0) return;
@@ -237,13 +243,13 @@ async function performSpin(isFree = false) {
 
         reels.forEach(r => r.classList.add("spinning"));
         const interval = setInterval(() => {
-            reels.forEach(r => r.innerHTML = renderSymbolHTML(CONFIG.getRandomSymbol()));
+            reels.forEach(r => r.innerHTML = renderSymbolHTML(getRandomSymbol()));
         }, CONFIG.ANIMATION.SPIN_INTERVAL);
 
         await new Promise(r => setTimeout(r, CONFIG.ANIMATION.SPIN_DURATION));
         clearInterval(interval);
 
-        const finals = Array.from({ length: 9 }, () => CONFIG.getRandomSymbol());
+        const finals = Array.from({ length: 9 }, () => getRandomSymbol());
         reels.forEach((r, i) => r.innerHTML = renderSymbolHTML(finals[i]));
         reels.forEach(r => r.classList.remove("spinning"));
 
@@ -274,14 +280,13 @@ async function performSpin(isFree = false) {
             updateMissionProgress("spin10", 1);
         }
 
-        // Acumula jackpot
+        // Jackpot
         if (win === 0) jackpot += Math.floor(currentBet * CONFIG.JACKPOT.PERCENT_LOSS);
         else jackpot += Math.floor(win * CONFIG.JACKPOT.PERCENT_WIN);
         if (jackpot > CONFIG.JACKPOT.MAX) jackpot = CONFIG.JACKPOT.MAX;
 
         if (isFree && freeSpins > 0) freeSpins--;
 
-        // Sincroniza com servidor
         try {
             await syncToServer(win);
             if (typeof loadRankingFromDB === "function") loadRankingFromDB();
@@ -311,6 +316,7 @@ async function performSpin(isFree = false) {
     }
 }
 
+// ========== CONFIGURAÇÕES DE APOSTA ==========
 function setBet(value) {
     let newBet = Math.min(CONFIG.BET.MAX, Math.max(CONFIG.BET.MIN, value));
     if (newBet > credits) newBet = credits;
@@ -318,6 +324,7 @@ function setBet(value) {
     updateUI();
 }
 
+// ========== VINCULAÇÃO DE ELEMENTOS ==========
 function bindGameElements() {
     const grid = document.getElementById("reelsGrid");
     if (grid && grid.children.length === 0) {
@@ -376,17 +383,15 @@ function setupGameEventListeners() {
     console.log("Event listeners configurados");
 }
 
+// ========== INICIALIZAÇÃO ==========
 async function initGameAfterLogin() {
-    // Carrega imagens em segundo plano
+    // Pré-carregamento em background
     CONFIG.SYMBOLS.forEach(s => {
         const img = new Image();
         img.src = s.img;
     });
 
-    // Inicializa o jogo
-    reels.forEach(r => r.innerHTML = renderSymbolHTML(CONFIG.getRandomSymbol()));
-    // Carrega missões salvas
-    loadMissions();
+    reels.forEach(r => r.innerHTML = renderSymbolHTML(getRandomSymbol()));
     updateUI();
     checkDailyReset();
     console.log("Jogo inicializado após login");
