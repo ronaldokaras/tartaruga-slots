@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🐢 TARTARUGA SORTUDA - SLOTS ULTIMATE 🎰</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+    <aside class="info-sidebar">
+        <div class="info-card compact">
+            <div class="info-row"><span class="label">👤 NOME</span><input id="playerName" type="text" value="" maxlength="20"></div>
+            <div class="info-row"><span class="label">💰 SALDO</span><span id="creditAmount" class="value">1000</span></div>
+            <div class="info-row"><span class="label">🎲 APOSTA</span><span id="betAmount" class="value">25</span></div>
+            <div class="info-row"><span class="label">🏆 ÚLTIMO GANHO</span><span id="lastWin" class="value">0</span></div>
+            <div class="info-row"><span class="label">🔥 MULTI</span><span id="multiplierValue" class="value">1x</span></div>
+            <div class="info-row"><span class="label">🐢 BÔNUS</span><span id="bonusCounter" class="value">0</span></div>
+            <div class="info-row"><span class="label">💎 NÍVEL</span><span id="levelValue" class="value">1</span></div>
+            <div class="info-row"><span class="label">⭐ XP</span><span id="xpValue" class="value">0/100</span></div>
+        </div>
+        <div class="side-panels">
+            <div class="panel">
+                <h4>🏆 TOP 5 MAIORES VITÓRIAS</h4>
+                <ul id="rankingList"></ul>
+                <button id="resetRankingBtn">Resetar Ranking</button>
+            </div>
+            <div class="panel">
+                <h4>📅 MISSÕES DIÁRIAS</h4>
+                <ul id="missionsList"></ul>
+                <button id="trocarContaBtn" class="trocar-conta-btn">🔄 Mudar Conta</button>
+            </div>
+        </div>
+    </aside>
+
+    <main class="game-area">
+        <div class="slot-machine">
+            <div class="reels-grid" id="reelsGrid"></div>
+            <div class="logo-container">
+                <img src="img/Logo.png" alt="Logo">
+            </div>
+            <div class="bet-control">
+                <button id="decreaseBet">-100</button>
+                <input type="number" id="betInput" value="25" min="10" max="2000" step="10">
+                <button id="increaseBet">+100</button>
+                <button id="maxBetBtn">MAX</button>
+            </div>
+            <div class="action-buttons">
+                <button id="spinBtn" class="spin-btn">🎰 GIRAR 🎰</button>
+                <button id="autoSpin5Btn">🔄 AUTO 5</button>
+                <button id="autoSpin10Btn">🔄 AUTO 10</button>
+                <button id="stopAutoBtn" disabled>⏹️ PARAR</button>
+            </div>
+        </div>
+    </main>
+
+    <aside class="turtle-sidebar">
+        <div class="fortune-turtle-banner">
+            <img src="img/TartarugaPrincipal.png" alt="Tartaruga da Sorte">
+        </div>
+        <img id="resgatarBtn" src="img/resgatar.png" alt="Resgatar Agora">
+    </aside>
+</div>
+
+<div id="loginOverlay" class="login-overlay">
+    <div class="login-box">
+        <h2>🐢 Tartaruga Sortuda</h2>
+        <p>Digite seu nome para jogar:</p>
+        <input type="text" id="loginNameInput" placeholder="Seu nome" maxlength="20">
+        <br>
+        <button id="loginEnterBtn">🐢 Entrar</button>
+        <p id="loginStatus" class="login-status"></p>
+    </div>
+</div>
+
+<div class="bubbles"></div>
+
+<script src="game.js"></script>
+<script>
+    // ==================== CONEXÃO COM BANCO (PROXY) ====================
+    const API_BASE = "/api/";
+
+    async function tursoQuery(sql, params = []) {
+        const response = await fetch(API_BASE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sql, params })
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    }
+
+    // Carrega usuário APENAS se existir; retorna o saldo ou null
+    async function loadUserFromDB(nome) {
+        try {
+            const result = await tursoQuery("SELECT creditos FROM tb_usuario WHERE user = ?", [nome]);
+            if (result.rows.length > 0) {
+                return result.rows[0].creditos;
+            } else {
+                return null; // usuário não encontrado
+            }
+        } catch(e) { 
+            console.error(e);
+            return null;
+        }
+    }
+
+    // Atualiza saldo do usuário (apenas para usuários já cadastrados)
+    async function saveUserToDB() {
+        try {
+            await tursoQuery(
+                "INSERT INTO tb_usuario (user, creditos) VALUES (?, ?) ON CONFLICT (user) DO UPDATE SET creditos = excluded.creditos",
+                [playerName, Math.floor(credits)]
+            );
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadRankingFromDB() {
+        try {
+            const result = await tursoQuery("SELECT nome, win, data FROM ranking ORDER BY win DESC LIMIT 10");
+            rankings = result.rows;
+            updateRankingUI();
+        } catch(e) { console.error(e); }
+    }
+
+    async function saveWinToDB(winAmount) {
+        try {
+            await tursoQuery("INSERT INTO ranking (nome, win, data) VALUES (?, ?, ?)", [playerName, winAmount, Date.now()]);
+        } catch(e) { console.error(e); }
+    }
+
+    let playerName = '';
+
+    async function startGameAfterLogin(nome, creds) {
+        playerName = nome;
+        localStorage.setItem('playerName', playerName);
+        document.getElementById("playerName").value = nome;
+        credits = creds;
+        updateUI();                 // do game.js
+        await loadRankingFromDB();
+        await initGameAfterLogin(); // do game.js
+        setupGameEventListeners();  // do game.js
+        setTimeout(() => {
+            document.getElementById("loginOverlay").style.display = "none";
+        }, 500);
+    }
+
+    const loginOverlay = document.getElementById("loginOverlay");
+    const loginNameInput = document.getElementById("loginNameInput");
+    const loginEnterBtn = document.getElementById("loginEnterBtn");
+    const loginStatus = document.getElementById("loginStatus");
+
+    loginOverlay.style.display = "flex";
+    loginNameInput.focus();
+    if (localStorage.getItem('playerName')) {
+        loginNameInput.value = localStorage.getItem('playerName');
+    }
+
+    loginEnterBtn.onclick = async () => {
+        const nome = loginNameInput.value.trim();
+    if (!nome) { loginStatus.textContent = "⚠️ Digite um nome!"; return; }
+    loginStatus.textContent = "🔍 Verificando...";
+    loginEnterBtn.disabled = true;
+    try {
+        // Testa conexão com o servidor
+        await tursoQuery("SELECT 1");
+        
+        // Tenta carregar o usuário
+        let creds = await loadUserFromDB(nome);
+        if (creds === null) {
+            // Usuário não existe: cria com saldo 1000
+            await tursoQuery(
+                "INSERT INTO tb_usuario (user, creditos) VALUES (?, ?) ON CONFLICT (user) DO NOTHING",
+                [nome, 1000]
+            );
+            creds = 1000;
+        }
+        loginStatus.textContent = `✅ Bem-vindo, ${nome}! Saldo: ${creds}`;
+        bindGameElements();
+        await startGameAfterLogin(nome, creds);
+    } catch(e) {
+        console.error(e);
+        loginStatus.textContent = "❌ Falha na conexão. Verifique se o servidor está rodando.";
+        loginEnterBtn.disabled = false;
+    }
+};
+
+    // Botão "RESGATAR AGORA" (mantido igual)
+    document.getElementById("resgatarBtn").addEventListener("click", () => {
+        const modalOverlay = document.createElement('div');
+        modalOverlay.style.position = 'fixed';
+        modalOverlay.style.top = '0';
+        modalOverlay.style.left = '0';
+        modalOverlay.style.width = '100%';
+        modalOverlay.style.height = '100%';
+        modalOverlay.style.backgroundColor = 'rgba(0,0,0,0.85)';
+        modalOverlay.style.display = 'flex';
+        modalOverlay.style.alignItems = 'center';
+        modalOverlay.style.justifyContent = 'center';
+        modalOverlay.style.zIndex = '10000';
+        modalOverlay.style.cursor = 'pointer';
+
+        const img = document.createElement('img');
+        img.src = 'img/resgatar_tartaruga.jpg';
+        img.style.maxWidth = '80%';
+        img.style.maxHeight = '80%';
+        img.style.borderRadius = '20px';
+        img.style.cursor = 'pointer';
+
+        modalOverlay.appendChild(img);
+        document.body.appendChild(modalOverlay);
+
+        const fechar = () => { modalOverlay.remove(); };
+        modalOverlay.addEventListener('click', fechar);
+        img.addEventListener('click', fechar);
+    });
+
+    // Botão "Mudar Conta"
+    document.getElementById("trocarContaBtn").addEventListener("click", () => {
+        // Limpa o nome salvo no localStorage e recarrega a página
+        localStorage.removeItem('playerName');
+        location.reload();
+    });
+</script>
+</body>
+</html>
