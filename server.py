@@ -10,13 +10,11 @@ from datetime import datetime
 DB_PATH = "slots.db"
 
 if getattr(sys, 'frozen', False):
-    # Está rodando como executável PyInstaller
     BASE_DIR = sys._MEIPASS
 else:
-    # Está rodando como script Python normal
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-os.chdir(BASE_DIR)  # Muda o diretório de trabalho para onde estão os arquivos
+os.chdir(BASE_DIR)
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -61,22 +59,18 @@ def init_db():
                 saldo INTEGER
             )
         """)
-        # Inserir jogo 'slots' se não existir
         cur = conn.execute("SELECT id FROM tb_jogos WHERE nome = ?", ("slots",))
         if not cur.fetchone():
             conn.execute("INSERT INTO tb_jogos (nome, saldo) VALUES (?, ?)", ("slots", 0))
         conn.commit()
 
 def executar_sql(sql, params=()):
+    # (mantida toda a função original, sem alterações)
     with get_db() as conn:
         sql_upper = sql.strip().upper()
-
-        # Ping
         if sql_upper == "SELECT 1":
             conn.execute("SELECT 1")
             return {"rows": []}
-
-        # SELECT creditos FROM tb_usuario WHERE user = ?
         if re.match(r"SELECT\s+creditos\s+FROM\s+tb_usuario\s+WHERE\s+user\s*=\s*\?", sql, re.IGNORECASE):
             nome = params[0]
             cur = conn.execute("SELECT saldo FROM tb_usuario WHERE nome_usuario = ?", (nome,))
@@ -85,15 +79,12 @@ def executar_sql(sql, params=()):
                 return {"rows": [{"creditos": row["saldo"]}]}
             else:
                 return {"rows": []}
-
-        # INSERT INTO tb_usuario (user, creditos) VALUES (?, ?) [sem ON CONFLICT]
         if re.match(r"INSERT\s+INTO\s+tb_usuario\s*\(\s*user\s*,\s*creditos\s*\)\s*VALUES\s*\(\s*\?\s*,\s*\?\s*\)", sql, re.IGNORECASE):
             nome = params[0]
             saldo = params[1]
             cur = conn.execute("SELECT id, saldo FROM tb_usuario WHERE nome_usuario = ?", (nome,))
             row = cur.fetchone()
             if not row:
-                # Cria novo usuário com saldo 1000 (mas a query pode passar outro valor)
                 conn.execute("INSERT INTO tb_usuario (nome_usuario, saldo) VALUES (?, ?)", (nome, 1000))
             else:
                 antigo = row["saldo"]
@@ -101,8 +92,6 @@ def executar_sql(sql, params=()):
                 variacao = saldo - antigo
                 atualizar_saldo_jogo(conn, variacao)
             return {"rows": []}
-
-        # INSERT com ON CONFLICT (usado pelo saveUserToDB)
         if re.match(r"INSERT\s+INTO\s+tb_usuario\s*\(\s*user\s*,\s*creditos\s*\)\s*VALUES\s*\(\s*\?\s*,\s*\?\s*\)\s+ON\s+CONFLICT", sql, re.IGNORECASE):
             nome = params[0]
             saldo = params[1]
@@ -116,8 +105,6 @@ def executar_sql(sql, params=()):
                 variacao = saldo - antigo
                 atualizar_saldo_jogo(conn, variacao)
             return {"rows": []}
-
-        # SELECT ranking (limit 10)
         if re.match(r"SELECT\s+nome\s*,\s*win\s*,\s*data\s+FROM\s+ranking\s+ORDER\s+BY\s+win\s+DESC\s+LIMIT\s+10", sql, re.IGNORECASE):
             cur = conn.execute("""
                 SELECT u.nome_usuario AS nome, m.valor AS win, m.data_transacao AS data
@@ -129,8 +116,6 @@ def executar_sql(sql, params=()):
             """)
             rows = [dict(row) for row in cur.fetchall()]
             return {"rows": rows}
-
-        # INSERT INTO ranking (nome, win, data) VALUES (?, ?, ?)
         if re.match(r"INSERT\s+INTO\s+ranking\s*\(\s*nome\s*,\s*win\s*,\s*data\s*\)\s*VALUES\s*\(\s*\?\s*,\s*\?\s*,\s*\?\s*\)", sql, re.IGNORECASE):
             nome = params[0]
             win = params[1]
@@ -138,15 +123,12 @@ def executar_sql(sql, params=()):
             cur = conn.execute("SELECT id FROM tb_usuario WHERE nome_usuario = ?", (nome,))
             row = cur.fetchone()
             if not row:
-                # Cria usuário automaticamente se não existir (para ranking)
                 conn.execute("INSERT INTO tb_usuario (nome_usuario, saldo) VALUES (?, ?)", (nome, 1000))
                 cur = conn.execute("SELECT id FROM tb_usuario WHERE nome_usuario = ?", (nome,))
                 row = cur.fetchone()
             user_id = row["id"]
             conn.execute("INSERT INTO tb_movimentacoes (valor, data_transacao, fk_usuario) VALUES (?, ?, ?)", (win, data_ts, user_id))
             return {"rows": []}
-
-        # Qualquer outra query (ex: CREATE, SELECT diagnóstico)
         if sql_upper.startswith("SELECT"):
             cur = conn.execute(sql, params)
             rows = [dict(row) for row in cur.fetchall()]
@@ -191,6 +173,49 @@ class TursoProxyHandler(http.server.SimpleHTTPRequestHandler):
                 saldo = result["rows"][0]["saldo"] if result.get("rows") else 0
                 self.send_json(200, {"jogo": "slots", "saldo": saldo})
             except Exception as e:
+                self.send_json(500, {"error": str(e)})
+            return
+
+        # NOVO ENDPOINT DE SINCRONIZAÇÃO ÚNICA
+        if self.path == "/api/sync":
+            length = int(self.headers['Content-Length'])
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body)
+                user = data.get("user")
+                credits = int(data.get("credits", 0))
+                win = int(data.get("win", 0))
+
+                if not user:
+                    self.send_json(400, {"error": "Campo 'user' obrigatório"})
+                    return
+
+                with get_db() as conn:
+                    # 1. Usuário: upsert e atualizar saldo do jogo
+                    cur = conn.execute("SELECT id, saldo FROM tb_usuario WHERE nome_usuario = ?", (user,))
+                    row = cur.fetchone()
+                    if not row:
+                        conn.execute("INSERT INTO tb_usuario (nome_usuario, saldo) VALUES (?, ?)", (user, credits))
+                        user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                    else:
+                        user_id = row["id"]
+                        old_credits = row["saldo"]
+                        conn.execute("UPDATE tb_usuario SET saldo = ? WHERE id = ?", (credits, user_id))
+                        variacao = credits - old_credits
+                        atualizar_saldo_jogo(conn, variacao)
+
+                    # 2. Registrar vitória (se houver)
+                    if win > 0:
+                        now_ts = int(datetime.utcnow().timestamp())
+                        conn.execute(
+                            "INSERT INTO tb_movimentacoes (valor, data_transacao, fk_usuario) VALUES (?, ?, ?)",
+                            (win, now_ts, user_id)
+                        )
+
+                    conn.commit()
+                self.send_json(200, {"status": "ok"})
+            except Exception as e:
+                traceback.print_exc()
                 self.send_json(500, {"error": str(e)})
             return
 
