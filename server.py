@@ -273,6 +273,19 @@ class TursoProxyHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 self.send_json(500, {"error": str(e)})
             return
+        if self.path.startswith('/img/'):
+            try:
+                with open(self.path[1:], 'rb') as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', 'image/png')  # Ajuste conforme necessário
+                self.send_header('Cache-Control', 'public, max-age=86400')  # 1 dia
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            except:
+                pass
+
         super().do_GET()
 
     def send_json(self, status, data):
