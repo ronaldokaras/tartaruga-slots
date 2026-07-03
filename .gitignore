@@ -1,0 +1,80 @@
+# ==========================================
+# Python (Compilados e Caches)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribuição / Pacotes
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+*.egg
+*.spec
+
+# ==========================================
+# Ambientes Virtuais (Virtual Envs)
+# ==========================================
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# Configurações de IDEs (VS Code, PyCharm)
+# ==========================================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# ==========================================
+# Bancos de Dados e Arquivos Locais
+# ==========================================
+*.db
+*.sqlite3
+# Se o seu MySQL gerar dumps locais, descomente a linha abaixo:
+# *.sql
+
+# ==========================================
+# Segurança e Variáveis de Ambiente (.env)
+# ==========================================
+.env
+.env.local
+.env.secret
+.env.development.local
+
+# ==========================================
+# Arquivos do Sistema Operacional
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ==========================================
+# Executáveis e Binários
+# ==========================================
+*.exe
+*.bin
+*.dll
