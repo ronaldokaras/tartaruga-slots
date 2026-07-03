@@ -378,13 +378,42 @@ function setupGameEventListeners() {
 }
 
 async function initGameAfterLogin() {
-    // Dispara o carregamento para o cache em segundo plano, sem aguardar (sem await)
-    SYMBOLS.forEach(s => {
-        const img = new Image();
-        img.src = s.img;
+    // Overlay com spinner usando classes CSS
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'loading-overlay';
+
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner';
+
+    const text = document.createElement('div');
+    text.className = 'loading-text';
+    text.textContent = 'Carregando...';
+
+    loadingDiv.appendChild(spinner);
+    loadingDiv.appendChild(text);
+    document.body.appendChild(loadingDiv);
+
+    // Pré‑carrega todas as imagens e aguarda
+    const imagePromises = SYMBOLS.map(s => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error(`Falha ao carregar ${s.img}`));
+            img.src = s.img;
+        });
     });
 
-    // Inicializa o jogo imediatamente
+    try {
+        await Promise.all(imagePromises);
+        console.log('Todas as imagens carregadas com sucesso.');
+    } catch (error) {
+        console.error('Erro no carregamento de imagens:', error);
+    }
+
+    // Remove o overlay
+    if (loadingDiv.parentNode) loadingDiv.parentNode.removeChild(loadingDiv);
+
+    // Inicializa o jogo normalmente
     reels.forEach(r => r.innerHTML = renderSymbolHTML(getRandomSymbol()));
     updateUI();
     checkDailyReset();
