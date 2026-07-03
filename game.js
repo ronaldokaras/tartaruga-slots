@@ -1,19 +1,11 @@
 // ==================== game.js ====================
-const SYMBOLS = [
-    { img: "img/tartaruga.png", name: "TARTARUGA", value: 45 },
-    { img: "img/trevo.png", name: "TREVO", value: 25 },
-    { img: "img/diamante.png", name: "DIAMANTE", value: 20 },
-    { img: "img/estrela.png", name: "ESTRELA", value: 16 },
-    { img: "img/concha.png", name: "CONCHA", value: 12 },
-    { img: "img/onda.png", name: "ONDA", value: 10 },
-    { img: "img/melancia.png", name: "MELANCIA", value: 8 }
-];
+// Agora usa CONFIG do arquivo config.js
 
-let credits = 1000;
-let currentBet = 25;
+let credits = CONFIG.INITIAL_CREDITS;
+let currentBet = CONFIG.BET.DEFAULT;
 let lastWin = 0;
 let winStreak = 0;
-let currentMultiplier = 1;
+let currentMultiplier = CONFIG.STREAK.BASE;
 let bonusTurtleCount = 0;
 let freeSpins = 0;
 let level = 1;
@@ -25,18 +17,19 @@ let spinning = false;
 let autoSpinActive = false;
 let autoSpinCount = 0;
 
-let missions = [
-    { id: "spin10", desc: "Gire 10 vezes", progress: 0, target: 10, reward: 100, completed: false },
-    { id: "win3streak", desc: "Ganhe 3 vezes seguidas", progress: 0, target: 3, reward: 150, completed: false },
-    { id: "turtle5", desc: "Acumule 5 tartarugas", progress: 0, target: 5, reward: 125, completed: false },
-    { id: "bigWin", desc: "Ganhe mais de 500 em 1 rodada", progress: 0, target: 1, reward: 250, completed: false }
-];
+// Missões – usa CONFIG.MISSIONS (mas mantém progresso)
+let missions = CONFIG.MISSIONS.map(m => ({
+    ...m,
+    progress: 0,
+    completed: false
+}));
 let lastMissionReset = Date.now();
 
 let reels = [];
 let creditSpan, betSpan, lastWinSpan, multiplierSpan, bonusSpan, levelSpan, xpSpan, betInput, spinBtn, stopAutoBtn;
 
-function getRandomSymbol() { return SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)]; }
+// ========== FUNÇÕES AUXILIARES ==========
+function getRandomSymbol() { return CONFIG.getRandomSymbol(); }
 function renderSymbolHTML(sym) { return `<img src="${sym.img}" alt="${sym.name}">`; }
 
 function updateUI() {
@@ -48,7 +41,7 @@ function updateUI() {
     multiplierSpan.textContent = `${currentMultiplier}x`;
     bonusSpan.textContent = bonusTurtleCount;
     levelSpan.textContent = level;
-    xpSpan.textContent = `${xp}/${level * 100}`;
+    xpSpan.textContent = `${xp}/${level * CONFIG.LEVEL.XP_PER_LEVEL}`;
     spinBtn.disabled = spinning;
     updateRankingUI();
     updateMissionsUI();
@@ -56,10 +49,10 @@ function updateUI() {
 
 function addXP(amount) {
     xp += amount;
-    while (xp >= level * 100) {
-        xp -= level * 100;
+    while (xp >= level * CONFIG.LEVEL.XP_PER_LEVEL) {
+        xp -= level * CONFIG.LEVEL.XP_PER_LEVEL;
         level++;
-        credits += 500;
+        credits += CONFIG.LEVEL.BONUS_CREDITS;
     }
     updateUI();
 }
@@ -68,16 +61,26 @@ function updateRankingUI() {
     const list = document.getElementById("rankingList");
     if (!list) return;
     list.innerHTML = "";
-    rankings.slice(0, 5).forEach(r => {
+    rankings.slice(0, CONFIG.RANKING_LIMIT).forEach(r => {
         const li = document.createElement("li");
         li.textContent = `${r.win} créditos - ${r.nome || 'Jogador'} (${new Date(r.data).toLocaleTimeString()})`;
         list.appendChild(li);
     });
 }
 
+// ========== MISSÕES ==========
 function loadMissions() {
     const saved = localStorage.getItem("missions");
-    if (saved) missions = JSON.parse(saved);
+    if (saved) {
+        const parsed = JSON.parse(saved);
+        // Atualiza com as novas missões do CONFIG, mantendo progresso
+        missions = CONFIG.MISSIONS.map(m => {
+            const existing = parsed.find(p => p.id === m.id);
+            return existing ? { ...m, progress: existing.progress, completed: existing.completed } : { ...m, progress: 0, completed: false };
+        });
+    } else {
+        missions = CONFIG.MISSIONS.map(m => ({ ...m, progress: 0, completed: false }));
+    }
     const savedReset = localStorage.getItem("lastMissionReset");
     if (savedReset) lastMissionReset = parseInt(savedReset);
 }
@@ -118,6 +121,7 @@ function checkDailyReset() {
     if (Date.now() - lastMissionReset >= 24 * 60 * 60 * 1000) resetDailyMissions();
 }
 
+// ========== EFEITOS VISUAIS ==========
 function showWinEffect(amount) {
     const overlay = document.createElement('div');
     overlay.className = 'win-overlay ' + (amount > 500 ? 'big' : 'small');
@@ -130,7 +134,7 @@ function showWinEffect(amount) {
         const appDiv = document.querySelector('.app');
         if (appDiv) appDiv.classList.add('shake');
         const colors = ['#ffd166', '#06d6a0', '#118ab2', '#ef476f', '#ffd76b'];
-        for (let i = 0; i < 40; i++) {
+        for (let i = 0; i < CONFIG.ANIMATION.CONFETTI_COUNT; i++) {
             const c = document.createElement('div');
             c.className = 'confetti';
             c.style.backgroundColor = colors[i % colors.length];
@@ -138,17 +142,18 @@ function showWinEffect(amount) {
             c.style.top = (-20 - Math.random() * 40) + 'px';
             c.style.transform = `rotate(${Math.random() * 360}deg)`;
             document.body.appendChild(c);
-            setTimeout(() => c.remove(), 2500);
+            setTimeout(() => c.remove(), CONFIG.ANIMATION.CONFETTI_DURATION);
         }
     }
-    setTimeout(() => overlay.remove(), amount > 500 ? 1600 : 900);
+    setTimeout(() => overlay.remove(), amount > 500 ? CONFIG.ANIMATION.WIN_EFFECT_BIG : CONFIG.ANIMATION.WIN_EFFECT_SMALL);
     setTimeout(() => {
         floating.remove();
         const appDiv = document.querySelector('.app');
         if (appDiv) appDiv.classList.remove('shake');
-    }, amount > 500 ? 2200 : 1400);
+    }, amount > 500 ? CONFIG.ANIMATION.WIN_EFFECT_BIG + 600 : CONFIG.ANIMATION.WIN_EFFECT_SMALL + 500);
 }
 
+// ========== LÓGICA DE PRÊMIOS ==========
 function evaluateMiddleRowWin(slots, bet, multiplier) {
     const mid = [slots[3], slots[4], slots[5]];
     const names = mid.map(s => s.name);
@@ -156,63 +161,63 @@ function evaluateMiddleRowWin(slots, bet, multiplier) {
     const trevoCount = names.filter(n => n === "TREVO").length;
     let win = 0, addBonus = 0, triggerFree = false, triggerJackpot = false;
 
-    // MULTIPLICADORES BEM REDUZIDOS
+    const P = CONFIG.PAYOUTS;
+
     if (turtleCount === 3) {
-        win = bet * 10;
+        win = bet * P.TURTLE_3;
         addBonus = 2;
         triggerJackpot = true;
     } else if (turtleCount === 2 && trevoCount === 1) {
-        win = bet * 6;
+        win = bet * P.TURTLE_2_TREVO;
         addBonus = 1;
     } else if (turtleCount === 2) {
-        win = bet * 4;
+        win = bet * P.TURTLE_2;
         addBonus = 1;
     } else if (trevoCount === 3) {
-        win = bet * 5;
+        win = bet * P.TREVO_3;
         triggerFree = true;
     } else if (names[0] === names[1] && names[1] === names[2]) {
-        win = bet * mid[0].value * 0.3;
+        win = bet * mid[0].value * P.THREE_SAME;
     }
 
-    // 🆕 NOVA REGRA: Se não ganhou nada ainda, verifica se tem 2 símbolos iguais
+    // Regra do par
     if (win === 0) {
         const counts = {};
         names.forEach(n => counts[n] = (counts[n] || 0) + 1);
         const hasPair = Object.values(counts).some(c => c >= 2);
         if (hasPair) {
-            win = bet * 1; // prêmio pequeno (1x a aposta)
+            win = bet * P.PAIR;
         }
     }
 
-    // Bônus por acúmulo: se chegar a 20, ganha um pouco
-    if (bonusTurtleCount + addBonus >= 20) {
-        win += bet * 2;
+    // Bônus por acúmulo de tartarugas
+    if (bonusTurtleCount + addBonus >= P.BONUS_THRESHOLD) {
+        win += bet * P.BONUS_TURTLE;
         bonusTurtleCount = 0;
     } else {
         bonusTurtleCount += addBonus;
     }
 
-    // Jackpot não adiciona mais ao prêmio
     if (triggerJackpot && jackpot > 0) {
         jackpot = 0;
     }
 
     if (triggerFree && freeSpins === 0) {
-        freeSpins = 2;
+        freeSpins = CONFIG.FREE_SPINS.COUNT;
     }
 
     win = Math.floor(win * multiplier);
     return { winAmount: win, addBonus, triggerFree };
 }
 
-// 🔄 Função que envia TUDO de uma vez para o servidor
+// ========== SINCRONIZAÇÃO COM SERVIDOR ==========
 async function syncToServer(winAmount) {
     try {
         await fetch('/api/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                user: playerName,          // playerName deve estar definida globalmente (nome do usuário logado)
+                user: playerName,
                 credits: Math.floor(credits),
                 win: winAmount || 0
             })
@@ -222,6 +227,7 @@ async function syncToServer(winAmount) {
     }
 }
 
+// ========== GIRO PRINCIPAL ==========
 async function performSpin(isFree = false) {
     if (spinning) return;
     if (!isFree && credits < currentBet && freeSpins === 0) return;
@@ -238,9 +244,9 @@ async function performSpin(isFree = false) {
         reels.forEach(r => r.classList.add("spinning"));
         const interval = setInterval(() => {
             reels.forEach(r => r.innerHTML = renderSymbolHTML(getRandomSymbol()));
-        }, 30); // velocidade de atualização dos rolos
+        }, CONFIG.ANIMATION.SPIN_INTERVAL);
 
-        await new Promise(r => setTimeout(r, 300)); // Otimização: espera mínima antes de parar os rolos
+        await new Promise(r => setTimeout(r, CONFIG.ANIMATION.SPIN_DURATION));
         clearInterval(interval);
 
         const finals = Array.from({ length: 9 }, () => getRandomSymbol());
@@ -256,35 +262,33 @@ async function performSpin(isFree = false) {
             stats.totalWin += win;
             if (win > stats.highestWin) stats.highestWin = win;
 
-            addXP(Math.floor(win / 10));
+            addXP(Math.floor(win * CONFIG.LEVEL.XP_PER_WIN));
             showWinEffect(win);
 
             reels.slice(3, 6).forEach(r => r.classList.add("middle-highlight"));
-            setTimeout(() => reels.slice(3, 6).forEach(r => r.classList.remove("middle-highlight")), 1400);
+            setTimeout(() => reels.slice(3, 6).forEach(r => r.classList.remove("middle-highlight")), CONFIG.ANIMATION.HIGHLIGHT_DURATION);
 
             winStreak++;
-            currentMultiplier = Math.min(3, 1 + Math.floor(winStreak / 3));
+            currentMultiplier = Math.min(CONFIG.STREAK.MAX_MULTIPLIER, CONFIG.STREAK.BASE + Math.floor(winStreak / CONFIG.STREAK.INCREMENT));
             updateMissionProgress("spin10", 1);
             updateMissionProgress("win3streak", 1);
             updateMissionProgress("turtle5", result.addBonus);
             if (win > 500) updateMissionProgress("bigWin", 1);
         } else {
             winStreak = 0;
-            currentMultiplier = 1;
+            currentMultiplier = CONFIG.STREAK.BASE;
             updateMissionProgress("spin10", 1);
         }
 
-        // Acumula jackpot
-        if (win === 0) jackpot += Math.floor(currentBet * 0.05);
-        else jackpot += Math.floor(win * 0.02);
-        if (jackpot > 50000) jackpot = 50000;
+        // Jackpot
+        if (win === 0) jackpot += Math.floor(currentBet * CONFIG.JACKPOT.PERCENT_LOSS);
+        else jackpot += Math.floor(win * CONFIG.JACKPOT.PERCENT_WIN);
+        if (jackpot > CONFIG.JACKPOT.MAX) jackpot = CONFIG.JACKPOT.MAX;
 
         if (isFree && freeSpins > 0) freeSpins--;
 
-        // ✅ SINCRONIZAÇÃO ÚNICA COM O SERVIDOR (substitui saveUserToDB e saveWinToDB)
         try {
             await syncToServer(win);
-            // Se existir a função de carregar ranking, chama depois de salvar
             if (typeof loadRankingFromDB === "function") loadRankingFromDB();
         } catch(e) {
             console.error(e);
@@ -304,21 +308,23 @@ async function performSpin(isFree = false) {
                 autoSpinActive = false;
                 stopAutoBtn.disabled = true;
             } else {
-                setTimeout(() => performSpin(freeSpins > 0), 400);
+                setTimeout(() => performSpin(freeSpins > 0), CONFIG.ANIMATION.AUTO_SPIN_DELAY);
             }
         } else if (freeSpins > 0 && !autoSpinActive) {
-            setTimeout(() => performSpin(true), 600);
+            setTimeout(() => performSpin(true), CONFIG.FREE_SPINS.AUTO_DELAY);
         }
     }
 }
 
+// ========== CONFIGURAÇÕES DE APOSTA ==========
 function setBet(value) {
-    let newBet = Math.min(2000, Math.max(10, value));
+    let newBet = Math.min(CONFIG.BET.MAX, Math.max(CONFIG.BET.MIN, value));
     if (newBet > credits) newBet = credits;
     currentBet = newBet;
     updateUI();
 }
 
+// ========== VINCULAÇÃO DE ELEMENTOS ==========
 function bindGameElements() {
     const grid = document.getElementById("reelsGrid");
     if (grid && grid.children.length === 0) {
@@ -345,10 +351,10 @@ function bindGameElements() {
 
 function setupGameEventListeners() {
     console.log("Configurando event listeners");
-    document.getElementById("decreaseBet").onclick = () => setBet(currentBet - 100);
-    document.getElementById("increaseBet").onclick = () => setBet(currentBet + 100);
-    document.getElementById("maxBetBtn").onclick = () => setBet(Math.min(2000, credits));
-    betInput.onchange = () => setBet(parseInt(betInput.value) || 10);
+    document.getElementById("decreaseBet").onclick = () => setBet(currentBet - CONFIG.BET.STEP);
+    document.getElementById("increaseBet").onclick = () => setBet(currentBet + CONFIG.BET.STEP);
+    document.getElementById("maxBetBtn").onclick = () => setBet(Math.min(CONFIG.BET.MAX, credits));
+    betInput.onchange = () => setBet(parseInt(betInput.value) || CONFIG.BET.MIN);
     spinBtn.onclick = () => performSpin(false);
 
     document.getElementById("autoSpin5Btn").onclick = () => {
@@ -377,8 +383,9 @@ function setupGameEventListeners() {
     console.log("Event listeners configurados");
 }
 
+// ========== INICIALIZAÇÃO ==========
 async function initGameAfterLogin() {
-    // Overlay com spinner usando classes CSS
+    // 1. Cria overlay de carregamento
     const loadingDiv = document.createElement('div');
     loadingDiv.id = 'loading-overlay';
 
@@ -393,8 +400,8 @@ async function initGameAfterLogin() {
     loadingDiv.appendChild(text);
     document.body.appendChild(loadingDiv);
 
-    // Pré‑carrega todas as imagens e aguarda
-    const imagePromises = SYMBOLS.map(s => {
+    // 2. Pré‑carrega todas as imagens usando CONFIG.SYMBOLS
+    const imagePromises = CONFIG.SYMBOLS.map(s => {
         return new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = () => resolve(img);
@@ -410,10 +417,10 @@ async function initGameAfterLogin() {
         console.error('Erro no carregamento de imagens:', error);
     }
 
-    // Remove o overlay
+    // 3. Remove o overlay
     if (loadingDiv.parentNode) loadingDiv.parentNode.removeChild(loadingDiv);
 
-    // Inicializa o jogo normalmente
+    // 4. Inicializa o jogo
     reels.forEach(r => r.innerHTML = renderSymbolHTML(getRandomSymbol()));
     updateUI();
     checkDailyReset();
