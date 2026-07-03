@@ -205,6 +205,23 @@ function evaluateMiddleRowWin(slots, bet, multiplier) {
     return { winAmount: win, addBonus, triggerFree };
 }
 
+// 🔄 Função que envia TUDO de uma vez para o servidor
+async function syncToServer(winAmount) {
+    try {
+        await fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user: playerName,          // playerName deve estar definida globalmente (nome do usuário logado)
+                credits: Math.floor(credits),
+                win: winAmount || 0
+            })
+        });
+    } catch(e) {
+        console.error('syncToServer error:', e);
+    }
+}
+
 async function performSpin(isFree = false) {
     if (spinning) return;
     if (!isFree && credits < currentBet && freeSpins === 0) return;
@@ -221,9 +238,9 @@ async function performSpin(isFree = false) {
         reels.forEach(r => r.classList.add("spinning"));
         const interval = setInterval(() => {
             reels.forEach(r => r.innerHTML = renderSymbolHTML(getRandomSymbol()));
-        }, 50); // velocidade de atualização dos rolos
+        }, 30); // velocidade de atualização dos rolos
 
-        await new Promise(r => setTimeout(r, 500)); // Otimização: espera mínima antes de parar os rolos
+        await new Promise(r => setTimeout(r, 300)); // Otimização: espera mínima antes de parar os rolos
         clearInterval(interval);
 
         const finals = Array.from({ length: 9 }, () => getRandomSymbol());
@@ -239,16 +256,11 @@ async function performSpin(isFree = false) {
             stats.totalWin += win;
             if (win > stats.highestWin) stats.highestWin = win;
 
-            if (typeof saveWinToDB === "function") {
-                saveWinToDB(win).then(() => {
-                    if (typeof loadRankingFromDB === "function") loadRankingFromDB();
-                });
-            }
             addXP(Math.floor(win / 10));
             showWinEffect(win);
 
             reels.slice(3, 6).forEach(r => r.classList.add("middle-highlight"));
-            setTimeout(() => reels.slice(3, 6).forEach(r => r.classList.remove("middle-highlight")), 1400); 
+            setTimeout(() => reels.slice(3, 6).forEach(r => r.classList.remove("middle-highlight")), 1400);
 
             winStreak++;
             currentMultiplier = Math.min(3, 1 + Math.floor(winStreak / 3));
@@ -269,8 +281,13 @@ async function performSpin(isFree = false) {
 
         if (isFree && freeSpins > 0) freeSpins--;
 
-        if (typeof saveUserToDB === "function") {
-            await saveUserToDB();
+        // ✅ SINCRONIZAÇÃO ÚNICA COM O SERVIDOR (substitui saveUserToDB e saveWinToDB)
+        try {
+            await syncToServer(win);
+            // Se existir a função de carregar ranking, chama depois de salvar
+            if (typeof loadRankingFromDB === "function") loadRankingFromDB();
+        } catch(e) {
+            console.error(e);
         }
 
     } catch (error) {
@@ -287,10 +304,10 @@ async function performSpin(isFree = false) {
                 autoSpinActive = false;
                 stopAutoBtn.disabled = true;
             } else {
-                setTimeout(() => performSpin(freeSpins > 0), 400); 
+                setTimeout(() => performSpin(freeSpins > 0), 400);
             }
         } else if (freeSpins > 0 && !autoSpinActive) {
-            setTimeout(() => performSpin(true), 600); 
+            setTimeout(() => performSpin(true), 600);
         }
     }
 }
@@ -361,12 +378,13 @@ function setupGameEventListeners() {
 }
 
 async function initGameAfterLogin() {
-    await Promise.all(SYMBOLS.map(s => new Promise(resolve => {
+    // Dispara o carregamento para o cache em segundo plano, sem aguardar (sem await)
+    SYMBOLS.forEach(s => {
         const img = new Image();
         img.src = s.img;
-        img.onload = resolve;
-        img.onerror = resolve;
-    })));
+    });
+
+    // Inicializa o jogo imediatamente
     reels.forEach(r => r.innerHTML = renderSymbolHTML(getRandomSymbol()));
     updateUI();
     checkDailyReset();
