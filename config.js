@@ -34,13 +34,6 @@ const CONFIG = {
         BONUS_THRESHOLD:20     // quantas tartarugas para ativar o bônus
     },
 
-    // ---------- PROBABILIDADES (pesos) ----------
-    // O sorteio usa os pesos para escolher um símbolo. Quanto maior o peso, mais comum.
-    // No código original, cada símbolo tem a mesma chance. Agora você pode ajustar.
-    // Exemplo: TARTARUGA (peso 1) é mais rara, MELANCIA (peso 7) é mais comum.
-    // O cálculo será: soma dos pesos, e cada símbolo tem probabilidade = peso/soma.
-    // O método getRandomSymbol() usará esta tabela.
-
     // ---------- MULTIPLICADOR DE RAQUETE (win streak) ----------
     STREAK: {
         MAX_MULTIPLIER: 3,
@@ -78,8 +71,8 @@ const CONFIG = {
 
     // ---------- ANIMAÇÃO ----------
     ANIMATION: {
-        SPIN_INTERVAL: 50,     // ms entre cada troca de símbolo durante o giro
-        SPIN_DURATION: 500,    // duração total do giro (ms)
+        SPIN_INTERVAL: 30,     // ms entre cada troca de símbolo durante o giro
+        SPIN_DURATION: 300,    // duração total do giro (ms)
         AUTO_SPIN_DELAY: 400,  // ms entre giros automáticos
         HIGHLIGHT_DURATION: 1400, // ms que a linha do meio fica destacada
         WIN_EFFECT_SMALL: 900,  // duração do efeito de vitória pequena
