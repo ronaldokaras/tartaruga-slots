@@ -159,5 +159,14 @@ Este projeto é de uso livre para fins educacionais e de estudo. Modifique e com
 Desenvolvido como projeto de sala de aula.  
 **Tartaruga Sortuda - Slots Ultimate** 🐢✨
 
+## 👥 Equipe
+
+Projeto desenvolvido de forma colaborativa para fins acadêmicos:
+
+| [<img src="https://github.com/douglasbecker404.png" width=115><br><sub>**douglasbecker404**</sub>](https://github.com/douglasbecker404) | [<img src="https://github.com/Guspelepe.png" width=115><br><sub>**Guspelepe**</sub>](https://github.com/Guspelepe) | [<img src="https://github.com/ronaldokaras.png" width=115><br><sub>**Ronaldo Karas**</sub>](https://github.com/ronaldokaras) |
+| :---: | :---: | :---: |
+| **Desenvolvedor** | **Desenvolvedor** | **Desenvolvedor** |
+
+
 Divirta‑se e boa sorte! 🍀
 ```
