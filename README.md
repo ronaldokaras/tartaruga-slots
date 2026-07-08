@@ -1,5 +1,10 @@
 # 🐢 Tartaruga Sortuda - Slots Ultimate
 
+**Pré Visualização Do Site**
+
+<img width="1555" height="773" alt="image" src="https://github.com/user-attachments/assets/4c64d71c-00ac-4f57-93c8-0768b5f428fd" />
+
+
 [![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)]()
 [![Python](https://img.shields.io/badge/Python-3.6%2B-blue)](https://www.python.org/)
 [![SQLite](https://img.shields.io/badge/SQLite-3-lightgrey)](https://www.sqlite.org/)
