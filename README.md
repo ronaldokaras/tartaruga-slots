@@ -153,9 +153,11 @@ Contribuições são bem‑vindas! Para sugerir melhorias, reportar bugs ou envi
 
 ---
 
-## 📄 Licença
+## 📄 Licença e Isenção de Responsabilidade
 
-Este projeto é de uso livre para fins educacionais e de estudo. Modifique e compartilhe à vontade.
+Este projeto é de uso livre e exclusivo para fins educacionais e de estudo. 
+
+**Aviso importante:** Por se tratar de um simulador de slots, o projeto não envolve dinheiro real e possui caráter estritamente didático. Os desenvolvedores não se responsabilizam pelo uso indevido deste código, por modificações de terceiros ou por qualquer simulação feita fora do escopo acadêmico. Modifique e compartilhe à vontade para fins de aprendizado!
 
 ---
 
